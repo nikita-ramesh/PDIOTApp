@@ -8,7 +8,7 @@
 
     <!-- Added TextView at the top -->
     <TextView
-        android:id="@+id/example_text"
+        android:id="@+id/classification_label"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="Example classification label"
@@ -22,7 +22,7 @@
         android:layout_height="wrap_content"
         android:orientation="vertical"
         android:id="@+id/respeck_graphs"
-        app:layout_constraintTop_toBottomOf="@id/example_text"
+        app:layout_constraintTop_toBottomOf="@id/classification_label"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintBottom_toTopOf="@id/thingy_graphs">
