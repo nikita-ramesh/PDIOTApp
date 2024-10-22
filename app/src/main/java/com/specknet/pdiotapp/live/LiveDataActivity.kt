@@ -75,14 +75,13 @@ class LiveDataActivity : AppCompatActivity() {
         // Set the layout for this activity
         setContentView(R.layout.activity_live_data)
         val classificationView: TextView = findViewById(R.id.classification_label)
-        classificationView.text = "test changed classification" // this is how to change the classification label in code
 
 
         // Initialize and set up the charts
         setupCharts()
 
         // Set up the broadcast receiver for Respeck device data
-        respeckLiveUpdateReceiver = object : BroadcastReceiver() {
+        respeckLiveUpdateReceiver = object : BroadcastReceiver() { // listen for updates from the Respeck
             override fun onReceive(context: Context, intent: Intent) {
 
                 // Log the thread name for debugging purposes
@@ -108,6 +107,15 @@ class LiveDataActivity : AppCompatActivity() {
 
                     // Update the graph with new data
                     updateGraph("respeck", x, y, z)
+
+                    // simple proof of concept of changing the classification label based on incoming data
+                    runOnUiThread {
+                        if (x > 0) {
+                            classificationView.text = "walking" // this is how to change the classification label in code
+                        } else {
+                            classificationView.text = "eating"
+                        }
+                    }
                 }
             }
         }
