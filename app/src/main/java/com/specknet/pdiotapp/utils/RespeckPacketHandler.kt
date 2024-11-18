@@ -2,15 +2,16 @@ package com.specknet.pdiotapp.utils
 
 import android.content.Intent
 import android.util.Log
+import com.specknet.pdiotapp.R
 import com.specknet.pdiotapp.bluetooth.BluetoothSpeckService
+import com.specknet.pdiotapp.utils.Constants.Config.RESPECK_UUID
+import java.io.IOException
+import java.util.Date
 import kotlin.math.abs
 
-/**
- * This class processes new RESpeck packets which are passed from the SpeckBluetoothService.
- * It contains all logic to transform the incoming bytes into the desired variables and then stores and broadcasts
- * this information.
- */
-class RESpeckPacketHandler(val speckService: BluetoothSpeckService) {
+class RESpeckPacketHandler(
+    val speckService: BluetoothSpeckService
+) {
 
     private var last_seq_number = -1
     private var mPhoneTimestampCurrentPacketReceived: Long = -1
@@ -20,28 +21,75 @@ class RESpeckPacketHandler(val speckService: BluetoothSpeckService) {
     private var currentSequenceNumberInBatch = 0
     private var mSamplingFrequency: Float = Constants.SAMPLING_FREQUENCY
 
-    // Flag to alternate between taking normal and IMU packets
     private var takeIMU = true
 
-    fun processRESpeckV6Packet(values: ByteArray, useIMU: Boolean = false) {
-        Log.d("BLT", "processRESpeckV6Packet: here")
+    private var mIsEncryptData = false
 
-        // Independent of the RESpeck timestamp, we use the phone timestamp
+    private var patientID: String = ""  // Default empty value
+    private var androidID: String = ""  // Default empty value
+    private var fwVersion: String = ""  // Default empty value
+
+    // Initialize CSV writers
+    private val normalCsvWriter = getNormalCsvFileWriter()
+    // Ensure imuCsvWriter is initialized for RESpeckIMUSensorDataCsv
+    val imuCsvWriter: SensorDataCsvWriter<RESpeckIMUSensorDataCsv> = getIMUCsvFileWriter()
+
+    // Method to set the androidID
+    fun setAndroidID(id: String) {
+        androidID = id
+    }
+
+    // Method to set the firmware version
+    fun setFwVersion(version: String) {
+        fwVersion = version
+    }
+
+    fun processRESpeckLivePacket(values: ByteArray) {
+        val actualPhoneTimestamp = Utils.getUnixTimestamp()
+        val r = RESpeckPacketDecoder.V6.decodePacket(values)
+
+        val x = r.batchData[0].acc.x / 9.81f
+        val y = r.batchData[0].acc.y / 9.81f
+        val z = r.batchData[0].acc.z / 9.81f
+
+        val newRESpeckLiveData = RESpeckLiveData(
+            actualPhoneTimestamp,
+            r.respeckTimestamp,
+            currentSequenceNumberInBatch,
+            x, y, z,
+            mSamplingFrequency,
+            r.battLevel,
+            r.chargingStatus,
+            r.batchData[0].gyro,
+            highFrequency = r.batchData[0].highFrequency
+        )
+
+        normalCsvWriter.write(
+            RESpeckSensorDataCsv(
+                actualPhoneTimestamp,
+                r.respeckTimestamp, // Assuming this is the RESpeck timestamp
+                currentSequenceNumberInBatch, // Sequence number
+                x, y, z // Accelerometer values
+            )
+        )
+
+        Log.i("LivePacket", "newRespeckLiveData = $newRESpeckLiveData")
+        broadcastRespeckLiveData(newRESpeckLiveData)
+
+        currentSequenceNumberInBatch += 1
+    }
+
+    fun processRESpeckV6Packet(values: ByteArray, useIMU: Boolean = false) {
         val actualPhoneTimestamp = Utils.getUnixTimestamp()
 
-        // Decode either normal or IMU packet based on the flag `useIMU`
         val r = if (useIMU) {
             RESpeckPacketDecoder.V6.decodeIMUPacket(values, takeIMU)
         } else {
             RESpeckPacketDecoder.V6.decodePacket(values, 0)
         }
 
-        // Invert `takeIMU` to alternate between packets if in IMU mode
-        if (useIMU) {
-            takeIMU = !takeIMU
-        }
+        if (useIMU) takeIMU = !takeIMU
 
-        // Sequence number handling for non-IMU packets (IMU packets may not have sequence numbers)
         if (!useIMU && last_seq_number >= 0 && r.seqNumber - last_seq_number != 1) {
             if (r.seqNumber == 0 && last_seq_number == 65535) {
                 Log.w("RESpeckPacketHandler", "Respeck seq number wrapped")
@@ -52,49 +100,104 @@ class RESpeckPacketHandler(val speckService: BluetoothSpeckService) {
         }
         last_seq_number = r.seqNumber
 
-        // Handle timestamps for phone and RESpeck device
         handleTimestamps(actualPhoneTimestamp, r.respeckTimestamp)
 
-        // Process each sample in the batch (e.g., 32 samples per batch)
         for ((_, acc, gyro, _, highFrequency) in r.batchData) {
-            val x = acc.x / 9.81f  // Normalize accelerometer data (convert to G-forces)
+            val x = acc.x / 9.81f
             val y = acc.y / 9.81f
             val z = acc.z / 9.81f
 
-            // Interpolate timestamps for each sample in the batch
-            val interpolatedPhoneTimestampOfCurrentSample = interpolateTimestamp(
+            val interpolatedPhoneTimestamp = interpolateTimestamp(
                 mPhoneTimestampLastPacketReceived,
                 mPhoneTimestampCurrentPacketReceived,
                 currentSequenceNumberInBatch,
                 Constants.NUMBER_OF_SAMPLES_PER_BATCH
             )
-            val interpolatedRespeckTimestampOfCurrentSample = interpolateTimestamp(
+            val interpolatedRespeckTimestamp = interpolateTimestamp(
                 mRESpeckTimestampLastPacketReceived,
                 mRESpeckTimestampCurrentPacketReceived,
                 currentSequenceNumberInBatch,
                 Constants.NUMBER_OF_SAMPLES_PER_BATCH
             )
 
-            // Create new RESpeckLiveData object with preprocessed values (including gyro data)
             val newRESpeckLiveData = RESpeckLiveData(
-                interpolatedPhoneTimestampOfCurrentSample,
-                interpolatedRespeckTimestampOfCurrentSample,
+                interpolatedPhoneTimestamp,
+                interpolatedRespeckTimestamp,
                 currentSequenceNumberInBatch,
                 x, y, z,
                 mSamplingFrequency,
                 r.battLevel,
                 r.chargingStatus,
                 gyro,
-                highFrequency = highFrequency
+                MagnetometerReading(0f, 0f, 0f)
             )
 
-            Log.i("Freq", "newRespeckLiveData = $newRESpeckLiveData")
+            if (useIMU) {
+                imuCsvWriter.write(
+                    RESpeckIMUSensorDataCsv(
+                        interpolatedPhoneTimestamp, // Long
+                        x, y, z, // Float (accelerometer data)
+                        gyro.x, gyro.y, gyro.z // Float (gyroscope data from `gyro`)
+                    )
+                )
+            } else {
+                normalCsvWriter.write(
+                    RESpeckSensorDataCsv(
+                        interpolatedPhoneTimestamp,  // Long (phone timestamp)
+                        mRESpeckTimestampCurrentPacketReceived, // Long (RESpeck timestamp)
+                        currentSequenceNumberInBatch, // Int (sequence number)
+                        x, y, z // Float (accelerometer data)
+                    )
+                )
+            }
 
-            // Broadcast preprocessed data
+            Log.i("Freq", "newRespeckLiveData = $newRESpeckLiveData")
             broadcastRespeckLiveData(newRESpeckLiveData)
 
             currentSequenceNumberInBatch += 1
         }
+    }
+
+    // For normal CSV writer
+    private fun getNormalCsvFileWriter(): SensorDataCsvWriter<RESpeckSensorDataCsv> =
+        getCsvFileWriter(
+            Constants.RESPECK_DATA_DIRECTORY_NAME,
+            RESpeckSensorDataCsv.csvHeader
+        )
+
+    // For IMU CSV writer
+    private fun getIMUCsvFileWriter(): SensorDataCsvWriter<RESpeckIMUSensorDataCsv> =
+        getCsvFileWriter(
+            Constants.RESPECK_IMU_DATA_DIRECTORY_NAME,
+            RESpeckIMUSensorDataCsv.csvHeader
+        )
+
+    // Generic function to get the CSV file writer
+    private fun <T : CsvSerializable> getCsvFileWriter(
+        dir: String,
+        header: String
+    ): SensorDataCsvWriter<T> {
+        // Check whether we are in a new day
+        val now = Date()
+
+        // Format the filename based on parameters
+        val filename = "./" +
+                dir +
+                listOf(
+                    speckService.getString(R.string.respeck_name),
+                    patientID,
+                    androidID,
+                    "${RESPECK_UUID.replace(":", "")}($fwVersion)",
+                    Constants.dateFormatter.format(now)
+                ).joinToString(" ")
+
+        // Return the appropriate CsvWriter instance for the specific type
+        return SensorDataCsvWriter(
+            filename,
+            header,
+            speckService.applicationContext, // Assuming this is needed for encryption
+            mIsEncryptData
+        )
     }
 
     private fun handleTimestamps(actualPhoneTimestamp: Long, respeckTimestamp: Long) {
@@ -125,12 +228,12 @@ class RESpeckPacketHandler(val speckService: BluetoothSpeckService) {
         mRESpeckTimestampCurrentPacketReceived = respeckTimestamp
     }
 
+
     private fun interpolateTimestamp(lastTs: Long, currentTs: Long, sequenceNum: Int, totalSamples: Int): Long {
         return ((currentTs - lastTs) * (sequenceNum * 1.0 / totalSamples)).toLong() + lastTs
     }
 
     private fun broadcastRespeckLiveData(data: RESpeckLiveData) {
-        // Send live broadcast intent with preprocessed data
         val liveDataIntent = Intent(Constants.ACTION_RESPECK_LIVE_BROADCAST)
         liveDataIntent.putExtra(Constants.RESPECK_LIVE_DATA, data)
         speckService.sendBroadcast(liveDataIntent)
@@ -138,5 +241,15 @@ class RESpeckPacketHandler(val speckService: BluetoothSpeckService) {
 
     private fun restartRespeckSamplingFrequency() {
         Log.w("RESpeckPacketHandler", "Restarting sampling frequency due to packet loss.")
+    }
+
+    fun closeHandler() {
+        try {
+            Log.i("RESpeckPacketHandler", "Closing CSV writers")
+            normalCsvWriter.close()
+            imuCsvWriter.close()
+        } catch (e: IOException) {
+            Log.e("RESpeckPacketHandler", "Error closing CSV writers: ${e.message}")
+        }
     }
 }

@@ -157,7 +157,7 @@ public class BluetoothSpeckService extends Service {
         Log.d(TAG, "startInForeground: here");
         if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.O) {
             Intent notificationIntent = new Intent(this, MainActivity.class);
-            PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, notificationIntent, 0);
+            PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, notificationIntent, PendingIntent.FLAG_IMMUTABLE);
 
             Notification notification = new Notification.Builder(this).setContentTitle(
                     getText(R.string.notification_speck_title)).setContentText(
@@ -422,7 +422,9 @@ public class BluetoothSpeckService extends Service {
                         @Override
                         public void run() {
                             Log.i(TAG, "RESpeck reconnecting...");
-                            establishConnectionAndSubscribe.accept(connectionState);
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                                establishConnectionAndSubscribe.accept(connectionState);
+                            }
                         }
                     }, Constants.RECONNECTION_TIMEOUT_MILLIS);
                 }
@@ -432,7 +434,9 @@ public class BluetoothSpeckService extends Service {
         });
 
         // first time establishing the connection, so the last state was "disconnected"
-        establishConnectionAndSubscribe.accept(RxBleConnection.RxBleConnectionState.DISCONNECTED);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            establishConnectionAndSubscribe.accept(RxBleConnection.RxBleConnectionState.DISCONNECTED);
+        }
     }
 
     private void connectToThingy() {
@@ -490,7 +494,9 @@ public class BluetoothSpeckService extends Service {
                         @Override
                         public void run() {
                             Log.i(TAG, "Thingy reconnecting...");
-                            establishConnectionAndSubscribe.accept(connectionState);
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                                establishConnectionAndSubscribe.accept(connectionState);
+                            }
                         }
                     }, Constants.RECONNECTION_TIMEOUT_MILLIS);
                 }
@@ -500,7 +506,9 @@ public class BluetoothSpeckService extends Service {
         });
 
         // first time establishing the connection, so the last state was "disconnected"
-        establishConnectionAndSubscribe.accept(RxBleConnection.RxBleConnectionState.DISCONNECTED);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            establishConnectionAndSubscribe.accept(RxBleConnection.RxBleConnectionState.DISCONNECTED);
+        }
     }
 
 
@@ -556,7 +564,9 @@ public class BluetoothSpeckService extends Service {
                                 Log.i(TAG, "RESpeck packet ignored as paused mode on");
                             } else {
                                 // Call requires API level 24 (current min is 22): java.util.function.Consumer#accept
-                                cvHandler.accept(bytes);
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                                    cvHandler.accept(bytes);
+                                }
                             }
                         }, throwable -> {
                             // An error with autoConnect means that we are disconnected
@@ -622,7 +632,9 @@ public class BluetoothSpeckService extends Service {
                                 Log.i(TAG, "Thingy packet ignored as paused mode on");
                             } else {
                                 // Call requires API level 24 (current min is 22): java.util.function.Consumer#accept
-                                cvHandler.accept(bytes);
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                                    cvHandler.accept(bytes);
+                                }
                             }
                         }, throwable -> {
                             // An error with autoConnect means that we are disconnected
