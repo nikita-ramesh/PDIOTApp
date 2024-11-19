@@ -316,9 +316,10 @@ class LiveDataActivity : AppCompatActivity() {
         }
 
         try {
+            Log.d("LiveDataActivity", "Starting classifySocialSignal")
             // Prepare input tensor for Respeck data
             val respeckInput = TensorBuffer.createFixedSize(
-                intArrayOf(32, Constants.SLIDING_WINDOW_SIZE, 3), DataType.FLOAT32
+                intArrayOf(1, Constants.SLIDING_WINDOW_SIZE, 3), DataType.FLOAT32
             )
             respeckInput.loadArray(respeckData)
 
@@ -330,6 +331,7 @@ class LiveDataActivity : AppCompatActivity() {
 
             // Process the result
             val result = outputBuffer.floatArray
+            Log.d("LiveDataActivity", "Social signal classification result: ${result.contentToString()}")
             val maxIndex = result.indexOfFirst { it == result.maxOrNull() ?: -1f }
             updateSocialSignalResult(maxIndex)
         } catch (e: Exception) {

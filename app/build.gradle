@@ -73,12 +73,12 @@ dependencies {
     implementation 'org.apache.commons:commons-lang3:3.7'
 
     // TensorFlow Lite
-    implementation 'org.tensorflow:tensorflow-lite:2.11.0'
+    implementation 'org.tensorflow:tensorflow-lite:2.16.1' //2.17.1 is jupyter notebook tf version
     // For GPU acceleration
-    implementation 'org.tensorflow:tensorflow-lite-gpu:2.11.0'
+    implementation 'org.tensorflow:tensorflow-lite-gpu:2.16.1' //latest available
     // For TensorFlow Lite with support for models that require
     // TensorFlow Lite's extra features like quantization and optimization
-    implementation 'org.tensorflow:tensorflow-lite-support:0.4.3'
+    implementation 'org.tensorflow:tensorflow-lite-support:0.4.4' //latest available
 
 
     // for the history/log feature

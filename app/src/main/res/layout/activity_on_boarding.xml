@@ -7,7 +7,6 @@
     tools:context=".onboarding.OnBoardingActivity"
     android:id="@+id/main_content">
 
-
     <androidx.viewpager.widget.ViewPager
         android:id="@+id/container"
         android:layout_width="match_parent"
