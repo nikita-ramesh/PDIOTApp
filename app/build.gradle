@@ -27,13 +27,21 @@ android {
         }
     }
 
-
     testOptions {
         unitTests.returnDefaultValues = true
         unitTests.includeAndroidResources = true
     }
+
+    sourceSets {
+        main {
+            assets.srcDirs = ['src/main/assets']
+        }
+    }
     androidResources {
         noCompress 'tflite'
+    }
+    aaptOptions {
+        noCompress "tflite"
     }
 }
 

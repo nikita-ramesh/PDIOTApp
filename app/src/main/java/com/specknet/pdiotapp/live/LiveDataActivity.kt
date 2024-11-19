@@ -64,8 +64,9 @@ class LiveDataActivity : AppCompatActivity() {
     // TensorFlow Lite Interpreter for Activity Classification
     private lateinit var tflite: Interpreter
 
-    private var combinedData = FloatArray(600) // 100 samples * 6 features
-
+    // Buffers for Respeck and Thingy data
+    private var respeckData = FloatArray(300) // 100 timesteps * 3 features (X, Y, Z)
+    private var thingyData = FloatArray(300)  // 100 timesteps * 3 features (X, Y, Z)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -87,9 +88,9 @@ class LiveDataActivity : AppCompatActivity() {
                     val y = liveData.accelY
                     val z = liveData.accelZ
 
-                    updateSlidingWindow(xRespeck, x, combinedData, 0)
-                    updateSlidingWindow(yRespeck, y, combinedData, 1)
-                    updateSlidingWindow(zRespeck, z, combinedData, 2)
+                    updateSlidingWindow(xRespeck, x, respeckData, 0)
+                    updateSlidingWindow(yRespeck, y, respeckData, 1)
+                    updateSlidingWindow(zRespeck, z, respeckData, 2)
 
                     time += 1
                     updateGraph("respeck", x, y, z)
@@ -114,9 +115,9 @@ class LiveDataActivity : AppCompatActivity() {
                     val y = liveData.accelY
                     val z = liveData.accelZ
 
-                    updateSlidingWindow(xThingy, x, combinedData, 3)
-                    updateSlidingWindow(yThingy, y, combinedData, 4)
-                    updateSlidingWindow(zThingy, z, combinedData, 5)
+                    updateSlidingWindow(xThingy, x, thingyData, 0)
+                    updateSlidingWindow(yThingy, y, thingyData, 1)
+                    updateSlidingWindow(zThingy, z, thingyData, 2)
 
                     time += 1
                     updateGraph("thingy", x, y, z)
@@ -209,7 +210,7 @@ class LiveDataActivity : AppCompatActivity() {
     }
 
     private fun loadModel() {
-        val modelPath = "model.tflite"  // Replace with your model's path
+        val modelPath = "activities_model.tflite"  // Replace with your model's path
         try {
             val assetManager = assets
             val model = FileUtil.loadMappedFile(this, modelPath)
@@ -225,16 +226,23 @@ class LiveDataActivity : AppCompatActivity() {
             Log.e("LiveDataActivity", "Model not initialized")
             return
         }
+
         try {
-            // Prepare the input tensor for classification
-            val inputBuffer = TensorBuffer.createFixedSize(intArrayOf(1, 600), DataType.FLOAT32)
-            inputBuffer.loadArray(combinedData)
+            // Prepare input tensors for Respeck and Thingy data
+            val respeckInput = TensorBuffer.createFixedSize(intArrayOf(1, 100, 3), DataType.FLOAT32)
+            respeckInput.loadArray(respeckData)
 
-            // Run the model
-            val outputBuffer = TensorBuffer.createFixedSize(intArrayOf(1, 6), DataType.FLOAT32)
-            tflite.run(inputBuffer.buffer, outputBuffer.buffer)
+            val thingyInput = TensorBuffer.createFixedSize(intArrayOf(1, 100, 3), DataType.FLOAT32)
+            thingyInput.loadArray(thingyData)
 
-            // Process the result (assuming it’s a classification task)
+            // Prepare output tensor (assuming there are 11 classes)
+            val outputBuffer = TensorBuffer.createFixedSize(intArrayOf(1, 11), DataType.FLOAT32)
+
+            // Run inference with both inputs
+            val inputs = arrayOf(respeckInput.buffer, thingyInput.buffer)
+            tflite.runForMultipleInputsOutputs(inputs, mapOf(0 to outputBuffer.buffer))
+
+            // Process the result
             val result = outputBuffer.floatArray
             val maxIndex = result.indexOfFirst { it == result.maxOrNull() ?: -1f }
             updateClassificationResult(maxIndex)
@@ -252,13 +260,13 @@ class LiveDataActivity : AppCompatActivity() {
         classificationView.text = "Activity: $activityLabel"
     }
 
-    fun updateSlidingWindow(list: MutableList<Float>, newValue: Float, combinedData: FloatArray, dataIndex: Int) {
-        list.removeAt(0) // Remove the oldest element
-        list.add(newValue) // Append the new value
+    fun updateSlidingWindow(list: MutableList<Float>, newValue: Float, buffer: FloatArray, featureIndex: Int) {
+        list.removeAt(0) // Remove oldest value
+        list.add(newValue) // Add new value
 
-        // Update the combinedData at the appropriate index
+        // Update buffer at appropriate index
         for (i in list.indices) {
-            combinedData[i * 6 + dataIndex] = list[i]
+            buffer[i * 3 + featureIndex] = list[i]
         }
     }
 
