@@ -20,11 +20,17 @@ interface ActivityLogDao {
     fun getTodayEntries(): List<ActivityLogEntry>
 
     @Query("""
-    SELECT activityName, SUM(endTime - startTime) as totalDuration
-    FROM activity_log
-    WHERE date(startTime / 1000, 'unixepoch', 'localtime') = :date
+    SELECT activityName, SUM(endTime - startTime) as totalDuration 
+    FROM activity_log 
+    WHERE startTime >= :startTime AND startTime < :endTime 
     GROUP BY activityName
 """)
-    fun getActivitySummaryForDate(date: String): List<ActivitySummary>
+    fun getActivitySummaryForDate(startTime: Long, endTime: Long): List<ActivitySummary>
+
+    @Query("SELECT COUNT(*) FROM activity_log")
+    fun getEntryCount(): Int
+
+    @Query("DELETE FROM activity_log")
+    fun deleteAllEntries()
 
 }

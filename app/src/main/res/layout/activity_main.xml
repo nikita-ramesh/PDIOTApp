@@ -74,7 +74,7 @@
             android:layout_marginTop="100px"
             android:layout_marginBottom="100px"
             android:background="#03A9F4"
-            android:text="View Activity Summary"
+            android:text="View Activity History"
             android:textColor="#FFFFFF"
             app:layout_constraintTop_toBottomOf="@+id/ble_button"
             app:layout_constraintBottom_toBottomOf="parent"
