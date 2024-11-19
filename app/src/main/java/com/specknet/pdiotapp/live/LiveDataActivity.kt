@@ -25,8 +25,6 @@ import org.tensorflow.lite.DataType
 import org.tensorflow.lite.Interpreter
 import org.tensorflow.lite.support.common.FileUtil
 import org.tensorflow.lite.support.tensorbuffer.TensorBuffer
-
-// for history/log functionality:
 import com.specknet.pdiotapp.database.AppDatabase
 import com.specknet.pdiotapp.database.dao.ActivityLogDao
 import com.specknet.pdiotapp.database.entities.ActivityLogEntry
@@ -59,25 +57,26 @@ class LiveDataActivity : AppCompatActivity() {
     val filterTestRespeck = IntentFilter(Constants.ACTION_RESPECK_LIVE_BROADCAST)
     val filterTestThingy = IntentFilter(Constants.ACTION_THINGY_BROADCAST)
 
-    var xRespeck = MutableList(100) { 0f }
-    var yRespeck = MutableList(100) { 0f }
-    var zRespeck = MutableList(100) { 0f }
+    var xRespeck = MutableList(Constants.SLIDING_WINDOW_SIZE) { 0f }
+    var yRespeck = MutableList(Constants.SLIDING_WINDOW_SIZE) { 0f }
+    var zRespeck = MutableList(Constants.SLIDING_WINDOW_SIZE) { 0f }
 
-    var xThingy = MutableList(100) { 0f }
-    var yThingy = MutableList(100) { 0f }
-    var zThingy = MutableList(100) { 0f }
+    var xThingy = MutableList(Constants.SLIDING_WINDOW_SIZE) { 0f }
+    var yThingy = MutableList(Constants.SLIDING_WINDOW_SIZE) { 0f }
+    var zThingy = MutableList(Constants.SLIDING_WINDOW_SIZE) { 0f }
 
     // TensorFlow Lite Interpreter for Activity Classification
     private lateinit var tflite: Interpreter
+    private lateinit var socialSignalTflite: Interpreter
 
     // Buffers for Respeck and Thingy data
-    private var respeckData = FloatArray(300) // 100 timesteps * 3 features (X, Y, Z)
-    private var thingyData = FloatArray(300)  // 100 timesteps * 3 features (X, Y, Z)
+    private var respeckData = FloatArray(Constants.SLIDING_WINDOW_SIZE * 3)
+    private var thingyData = FloatArray(Constants.SLIDING_WINDOW_SIZE * 3)
 
     private var respeckSampleCount = 0
     private var thingySampleCount = 0
 
-    // for history/log functinality:
+    // for history/log functionality:
     private lateinit var db: AppDatabase
     private lateinit var activityLogDao: ActivityLogDao
     private var currentActivity: String? = null
@@ -94,9 +93,9 @@ class LiveDataActivity : AppCompatActivity() {
         // for history/log functionality: Initialize activity start time
         activityStartTime = System.currentTimeMillis()
 
-
         // Load TensorFlow Lite model
         loadModel()
+        loadSocialSignalModel()
         setupCharts()
 
         // Respeck Receiver
@@ -159,8 +158,9 @@ class LiveDataActivity : AppCompatActivity() {
     // Function to check if both sensors have collected enough data before running classification
     private fun checkAndClassifyActivity() {
         // Ensure both Respeck and Thingy have received 100 new steps before running classification
-        if (respeckSampleCount >= 100 && thingySampleCount >= 100) {
+        if (respeckSampleCount >= Constants.SLIDING_WINDOW_SIZE && thingySampleCount >= Constants.SLIDING_WINDOW_SIZE) {
             classifyActivity()
+            classifySocialSignal()
             // Reset step counts after running classification so new windows can be collected
             respeckSampleCount = 0
             thingySampleCount = 0
@@ -168,7 +168,7 @@ class LiveDataActivity : AppCompatActivity() {
             xRespeck.clear(); yRespeck.clear(); zRespeck.clear()
             xThingy.clear(); yThingy.clear(); zThingy.clear()
             // Reinitialize with zeros or empty values for next collection round:
-            repeat(100) {
+            repeat(Constants.SLIDING_WINDOW_SIZE) {
                 xRespeck.add(0f); yRespeck.add(0f); zRespeck.add(0f)
                 xThingy.add(0f); yThingy.add(0f); zThingy.add(0f)
             }
@@ -267,6 +267,18 @@ class LiveDataActivity : AppCompatActivity() {
         }
     }
 
+    private fun loadSocialSignalModel() {
+        val modelPath = "social_signals_gmodel1.tflite" // Social signal model
+        try {
+            val assetManager = assets
+            val model = FileUtil.loadMappedFile(this, modelPath)
+            socialSignalTflite = Interpreter(model)
+            Log.d("LiveDataActivity", "Social signal model loaded successfully")
+        } catch (e: Exception) {
+            Log.e("LiveDataActivity", "Error loading social signal model", e)
+        }
+    }
+
     private fun classifyActivity() {
         if (!::tflite.isInitialized) {
             Log.e("LiveDataActivity", "Model not initialized")
@@ -275,10 +287,10 @@ class LiveDataActivity : AppCompatActivity() {
 
         try {
             // Prepare input tensors for Respeck and Thingy data
-            val respeckInput = TensorBuffer.createFixedSize(intArrayOf(1, 100, 3), DataType.FLOAT32)
+            val respeckInput = TensorBuffer.createFixedSize(intArrayOf(1, Constants.SLIDING_WINDOW_SIZE, 3), DataType.FLOAT32)
             respeckInput.loadArray(respeckData)
 
-            val thingyInput = TensorBuffer.createFixedSize(intArrayOf(1, 100, 3), DataType.FLOAT32)
+            val thingyInput = TensorBuffer.createFixedSize(intArrayOf(1, Constants.SLIDING_WINDOW_SIZE, 3), DataType.FLOAT32)
             thingyInput.loadArray(thingyData)
 
             // Prepare output tensor (assuming there are 11 classes)
@@ -294,6 +306,34 @@ class LiveDataActivity : AppCompatActivity() {
             updateClassificationResult(maxIndex)
         } catch (e: Exception) {
             Log.e("LiveDataActivity", "Error during classification", e)
+        }
+    }
+
+    private fun classifySocialSignal() {
+        if (!::socialSignalTflite.isInitialized) {
+            Log.e("LiveDataActivity", "Social signal model not initialized")
+            return
+        }
+
+        try {
+            // Prepare input tensor for Respeck data
+            val respeckInput = TensorBuffer.createFixedSize(
+                intArrayOf(32, Constants.SLIDING_WINDOW_SIZE, 3), DataType.FLOAT32
+            )
+            respeckInput.loadArray(respeckData)
+
+            // Prepare output tensor (assuming there are N social signal classes)
+            val outputBuffer = TensorBuffer.createFixedSize(intArrayOf(1, 4), DataType.FLOAT32) // Replace N with the actual number of classes
+
+            // Run inference
+            socialSignalTflite.run(respeckInput.buffer, outputBuffer.buffer)
+
+            // Process the result
+            val result = outputBuffer.floatArray
+            val maxIndex = result.indexOfFirst { it == result.maxOrNull() ?: -1f }
+            updateSocialSignalResult(maxIndex)
+        } catch (e: Exception) {
+            Log.e("LiveDataActivity", "Error during social signal classification", e)
         }
     }
 
@@ -329,8 +369,17 @@ class LiveDataActivity : AppCompatActivity() {
         // Else, activity is the same, do nothing
     }
 
+    private fun updateSocialSignalResult(index: Int) {
+        // Get the social signal label using the index
+        val socialSignalLabel = getSocialSignalFromIndex(index)
+
+        // Update the social signal TextView
+        val socialSignalView: TextView = findViewById(R.id.social_signal_label)
+        socialSignalView.text = "Social Signal: $socialSignalLabel"
+    }
+
     fun updateSlidingWindow(list: MutableList<Float>, newValue: Float, buffer: FloatArray, featureIndex: Int) {
-        if (list.size < 100) {
+        if (list.size < Constants.SLIDING_WINDOW_SIZE) {
             Log.e("LiveDataActivity", "List size is smaller than expected!")
             return
         }
@@ -362,6 +411,16 @@ class LiveDataActivity : AppCompatActivity() {
             9 -> "Ascending"
             10 -> "Descending"
             else -> "Miscellaneous Movement"
+        }
+    }
+
+    fun getSocialSignalFromIndex(index: Int): String {
+        return when (index) {
+            0 -> "Breathing Normally"
+            1 -> "Coughing"
+            2 -> "Hyperventilation"
+            3 -> "Other"
+            else -> "Other"
         }
     }
 
