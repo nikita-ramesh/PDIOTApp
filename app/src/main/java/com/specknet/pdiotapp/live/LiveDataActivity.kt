@@ -268,7 +268,7 @@ class LiveDataActivity : AppCompatActivity() {
     }
 
     private fun loadSocialSignalModel() {
-        val modelPath = "social_signals_gmodel1.tflite" // Social signal model
+        val modelPath = "social_signals_model.tflite" // Social signal model
         try {
             val assetManager = assets
             val model = FileUtil.loadMappedFile(this, modelPath)
@@ -344,8 +344,15 @@ class LiveDataActivity : AppCompatActivity() {
         val activityLabel = getActivityFromIndex(index)
 
         // Update the classification view with the activity result
-        val classificationView: TextView = findViewById(R.id.classification_label)
-        classificationView.text = "Activity: $activityLabel"
+        runOnUiThread {
+            val classificationView: TextView = findViewById(R.id.classification_label)
+            if (classificationView != null) {
+                classificationView.text = "Activity: $activityLabel"
+            } else {
+                Log.e("LiveDataActivity", "TextView for classification not found.")
+            }
+        }
+
         val currentTime = System.currentTimeMillis()
         if (currentActivity == null) {
             // First activity detected
@@ -375,9 +382,15 @@ class LiveDataActivity : AppCompatActivity() {
         // Get the social signal label using the index
         val socialSignalLabel = getSocialSignalFromIndex(index)
 
-        // Update the social signal TextView
-        val socialSignalView: TextView = findViewById(R.id.social_signal_label)
-        socialSignalView.text = "Social Signal: $socialSignalLabel"
+        runOnUiThread {
+            // Update the social signal TextView
+            val socialSignalView: TextView = findViewById(R.id.social_signal_label)
+            if (socialSignalView != null) {
+                socialSignalView.text = "Social Signal: $socialSignalLabel"
+            } else {
+                Log.e("LiveDataActivity", "TextView for social signal not found.")
+            }
+        }
     }
 
     fun updateSlidingWindow(list: MutableList<Float>, newValue: Float, buffer: FloatArray, featureIndex: Int) {
@@ -422,7 +435,7 @@ class LiveDataActivity : AppCompatActivity() {
             1 -> "Coughing"
             2 -> "Hyperventilation"
             3 -> "Other"
-            else -> "Other"
+            else -> "Breathing else"
         }
     }
 
