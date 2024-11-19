@@ -1,27 +1,30 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.coordinatorlayout.widget.CoordinatorLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/coordinatorLayout"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:id="@+id/coordinatorLayout"
     tools:context=".MainActivity">
 
     <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent">
 
+        <!-- Existing TextView -->
         <TextView
             android:id="@+id/textView2"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="100px"
             android:text="I want to"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintBottom_toTopOf="@+id/record_button"/>
+            app:layout_constraintBottom_toTopOf="@+id/record_button"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent" />
 
+        <!-- Existing Record Data Button -->
         <Button
             android:id="@+id/record_button"
             android:layout_width="550px"
@@ -30,12 +33,12 @@
             android:background="#03A9F4"
             android:text="Record data"
             android:textColor="#FFFFFF"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@+id/textView2"
-            app:layout_constraintBottom_toTopOf="@+id/live_button"/>
+            app:layout_constraintBottom_toTopOf="@+id/live_button"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent" />
 
-
+        <!-- Existing Live Processing Button -->
         <Button
             android:id="@+id/live_button"
             android:layout_width="550px"
@@ -44,28 +47,40 @@
             android:background="#03A9F4"
             android:text="Watch live processing"
             android:textColor="#FFFFFF"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@+id/record_button"
-            app:layout_constraintBottom_toTopOf="@+id/ble_button"/>
+            app:layout_constraintBottom_toTopOf="@+id/ble_button"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent" />
 
-
+        <!-- Existing Connect Sensors Button -->
         <Button
             android:id="@+id/ble_button"
             android:layout_width="550px"
             android:layout_height="wrap_content"
+            android:layout_marginTop="100px"
+            android:background="#03A9F4"
             android:text="Connect sensors"
+            android:textColor="#FFFFFF"
+            app:layout_constraintTop_toBottomOf="@+id/live_button"
+            app:layout_constraintBottom_toTopOf="@+id/summary_button"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent" />
+
+        <!-- **New Activity Summary Button** -->
+        <Button
+            android:id="@+id/summary_button"
+            android:layout_width="550px"
+            android:layout_height="wrap_content"
             android:layout_marginTop="100px"
             android:layout_marginBottom="100px"
             android:background="#03A9F4"
+            android:text="View Activity Summary"
             android:textColor="#FFFFFF"
-            app:layout_constraintTop_toBottomOf="@+id/live_button"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/ble_button"
             app:layout_constraintBottom_toBottomOf="parent"
-            />
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent" />
 
     </androidx.constraintlayout.widget.ConstraintLayout>
-
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>
