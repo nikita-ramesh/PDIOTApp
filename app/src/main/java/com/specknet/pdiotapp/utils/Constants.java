@@ -8,6 +8,7 @@ import java.util.Locale;
 import java.util.Map;
 
 public class Constants {
+    public static final int SLIDING_WINDOW_SIZE = 100;
     // Respeck extras
     public static final int NUMBER_OF_SAMPLES_PER_BATCH = 32;
     public static final float SAMPLING_FREQUENCY = 12.7f;

@@ -1,16 +1,16 @@
 package com.specknet.pdiotapp.live
 
-// Import necessary Android and Kotlin libraries
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.Looper
 import android.util.Log
+import android.widget.TextView
+import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import com.github.mikephil.charting.charts.LineChart
 import com.github.mikephil.charting.data.Entry
@@ -21,144 +21,110 @@ import com.specknet.pdiotapp.R
 import com.specknet.pdiotapp.utils.Constants
 import com.specknet.pdiotapp.utils.RESpeckLiveData
 import com.specknet.pdiotapp.utils.ThingyLiveData
-import kotlin.collections.ArrayList
+import org.tensorflow.lite.DataType
+import org.tensorflow.lite.Interpreter
+import org.tensorflow.lite.support.common.FileUtil
+import org.tensorflow.lite.support.tensorbuffer.TensorBuffer
 
-import android.widget.TextView // for the classification label
-
-
-/**
- * This is the main activity class for displaying live data from devices.
- * It extends AppCompatActivity, which is a base class for activities
- * that use the support library action bar features.
- */
 class LiveDataActivity : AppCompatActivity() {
 
-    // LineDataSets for Respeck accelerometer data (x, y, z)
     lateinit var dataSet_res_accel_x: LineDataSet
     lateinit var dataSet_res_accel_y: LineDataSet
     lateinit var dataSet_res_accel_z: LineDataSet
 
-    // LineDataSets for Thingy accelerometer data (x, y, z)
     lateinit var dataSet_thingy_accel_x: LineDataSet
     lateinit var dataSet_thingy_accel_y: LineDataSet
     lateinit var dataSet_thingy_accel_z: LineDataSet
 
-    // Variable to keep track of time for plotting on the x-axis
     var time = 0f
 
-    // LineData objects to hold all data sets for the charts
     lateinit var allRespeckData: LineData
     lateinit var allThingyData: LineData
 
-    // LineChart views for displaying the graphs in the UI
     lateinit var respeckChart: LineChart
     lateinit var thingyChart: LineChart
 
-    // BroadcastReceivers to receive live data updates from devices
     lateinit var respeckLiveUpdateReceiver: BroadcastReceiver
     lateinit var thingyLiveUpdateReceiver: BroadcastReceiver
 
-    // Loopers for handling background threads for the receivers
     lateinit var looperRespeck: Looper
     lateinit var looperThingy: Looper
 
-    // IntentFilters to specify which broadcasts to listen for
     val filterTestRespeck = IntentFilter(Constants.ACTION_RESPECK_LIVE_BROADCAST)
     val filterTestThingy = IntentFilter(Constants.ACTION_THINGY_BROADCAST)
 
-    /**
-     * onCreate is called when the activity is first created.
-     * It initializes the activity, sets up the UI, and registers broadcast receivers.
-     */
+    var xRespeck = MutableList(100) { 0f }
+    var yRespeck = MutableList(100) { 0f }
+    var zRespeck = MutableList(100) { 0f }
+
+    var xThingy = MutableList(100) { 0f }
+    var yThingy = MutableList(100) { 0f }
+    var zThingy = MutableList(100) { 0f }
+
+    // TensorFlow Lite Interpreter for Activity Classification
+    private lateinit var tflite: Interpreter
+
+    private var combinedData = FloatArray(600) // 100 samples * 6 features
+
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Set the layout for this activity
         setContentView(R.layout.activity_live_data)
         val classificationView: TextView = findViewById(R.id.classification_label)
 
+        // Load TensorFlow Lite model
+        loadModel()
 
-        // Initialize and set up the charts
         setupCharts()
 
-        // Set up the broadcast receiver for Respeck device data
-        respeckLiveUpdateReceiver = object : BroadcastReceiver() { // listen for updates from the Respeck
+        // Respeck Receiver
+        respeckLiveUpdateReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
-
-                // Log the thread name for debugging purposes
-                Log.i("thread", "I am running on thread = " + Thread.currentThread().name)
-
                 val action = intent.action
-
-                // Check if the received broadcast is from Respeck device
                 if (action == Constants.ACTION_RESPECK_LIVE_BROADCAST) {
-
-                    // Retrieve live data from the intent
-                    val liveData =
-                        intent.getSerializableExtra(Constants.RESPECK_LIVE_DATA) as RESpeckLiveData
-                    Log.d("Live", "onReceive: liveData = " + liveData)
-
-                    // Extract accelerometer data (x, y, z)
+                    val liveData = intent.getSerializableExtra(Constants.RESPECK_LIVE_DATA) as RESpeckLiveData
                     val x = liveData.accelX
                     val y = liveData.accelY
                     val z = liveData.accelZ
 
-                    // Increment time for the x-axis of the graph
+                    updateSlidingWindow(xRespeck, x, combinedData, 0)
+                    updateSlidingWindow(yRespeck, y, combinedData, 1)
+                    updateSlidingWindow(zRespeck, z, combinedData, 2)
+
                     time += 1
-
-                    // Update the graph with new data
                     updateGraph("respeck", x, y, z)
-
-                    // simple proof of concept of changing the classification label based on incoming data
-                    runOnUiThread {
-                        if (x > 0) {
-                            classificationView.text = "walking" // this is how to change the classification label in code
-                        } else {
-                            classificationView.text = "eating"
-                        }
-                    }
+                    classifyActivity()
                 }
             }
         }
 
-        // Register the Respeck broadcast receiver on a background thread
         val handlerThreadRespeck = HandlerThread("bgThreadRespeckLive")
         handlerThreadRespeck.start()
         looperRespeck = handlerThreadRespeck.looper
         val handlerRespeck = Handler(looperRespeck)
         this.registerReceiver(respeckLiveUpdateReceiver, filterTestRespeck, null, handlerRespeck)
 
-        // Set up the broadcast receiver for Thingy device data
+        // Thingy Receiver
         thingyLiveUpdateReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
-
-                // Log the thread name for debugging purposes
-                Log.i("thread", "I am running on thread = " + Thread.currentThread().name)
-
                 val action = intent.action
-
-                // Check if the received broadcast is from Thingy device
-                if (action == Constants.ACTION_THINGY_BROADCAST) {
-
-                    // Retrieve live data from the intent
-                    val liveData =
-                        intent.getSerializableExtra(Constants.THINGY_LIVE_DATA) as ThingyLiveData
-                    Log.d("Live", "onReceive: liveData = " + liveData)
-
-                    // Extract accelerometer data (x, y, z)
+                if (action == Constants.ACTION_THINGY_BROADCAST)  {
+                    val liveData = intent.getSerializableExtra(Constants.THINGY_LIVE_DATA) as ThingyLiveData
                     val x = liveData.accelX
                     val y = liveData.accelY
                     val z = liveData.accelZ
 
-                    // Increment time for the x-axis of the graph
-                    time += 1
+                    updateSlidingWindow(xThingy, x, combinedData, 3)
+                    updateSlidingWindow(yThingy, y, combinedData, 4)
+                    updateSlidingWindow(zThingy, z, combinedData, 5)
 
-                    // Update the graph with new data
+                    time += 1
                     updateGraph("thingy", x, y, z)
+                    classifyActivity()
                 }
             }
         }
 
-        // Register the Thingy broadcast receiver on a background thread
         val handlerThreadThingy = HandlerThread("bgThreadThingyLive")
         handlerThreadThingy.start()
         looperThingy = handlerThreadThingy.looper
@@ -166,49 +132,37 @@ class LiveDataActivity : AppCompatActivity() {
         this.registerReceiver(thingyLiveUpdateReceiver, filterTestThingy, null, handlerThingy)
     }
 
-    /**
-     * Sets up the charts by initializing data sets and configuring their appearance.
-     */
     fun setupCharts() {
-        // Find the LineChart views in the layout
         respeckChart = findViewById(R.id.respeck_chart)
         thingyChart = findViewById(R.id.thingy_chart)
 
-        // Reset time for plotting
         time = 0f
 
-        // Initialize data entries lists for Respeck accelerometer data
         val entries_res_accel_x = ArrayList<Entry>()
         val entries_res_accel_y = ArrayList<Entry>()
         val entries_res_accel_z = ArrayList<Entry>()
 
-        // Create LineDataSets for Respeck accelerometer data
         dataSet_res_accel_x = LineDataSet(entries_res_accel_x, "Accel X")
         dataSet_res_accel_y = LineDataSet(entries_res_accel_y, "Accel Y")
         dataSet_res_accel_z = LineDataSet(entries_res_accel_z, "Accel Z")
 
-        // Configure appearance of Respeck data sets
         dataSet_res_accel_x.setDrawCircles(false)
         dataSet_res_accel_y.setDrawCircles(false)
         dataSet_res_accel_z.setDrawCircles(false)
 
-        // Set colors for Respeck data sets
         dataSet_res_accel_x.color = ContextCompat.getColor(this, R.color.red)
         dataSet_res_accel_y.color = ContextCompat.getColor(this, R.color.green)
         dataSet_res_accel_z.color = ContextCompat.getColor(this, R.color.blue)
 
-        // Add Respeck data sets to a list
         val dataSetsRes = ArrayList<ILineDataSet>()
         dataSetsRes.add(dataSet_res_accel_x)
         dataSetsRes.add(dataSet_res_accel_y)
         dataSetsRes.add(dataSet_res_accel_z)
 
-        // Create LineData object with Respeck data sets and set it to the chart
         allRespeckData = LineData(dataSetsRes)
         respeckChart.data = allRespeckData
-        respeckChart.invalidate() // Refresh the chart
+        respeckChart.invalidate()
 
-        // Repeat the same steps for Thingy accelerometer data
         time = 0f
         val entries_thingy_accel_x = ArrayList<Entry>()
         val entries_thingy_accel_y = ArrayList<Entry>()
@@ -233,65 +187,102 @@ class LiveDataActivity : AppCompatActivity() {
 
         allThingyData = LineData(dataSetsThingy)
         thingyChart.data = allThingyData
-        thingyChart.invalidate() // Refresh the chart
+        thingyChart.invalidate()
     }
 
-    /**
-     * Updates the specified graph with new accelerometer data.
-     *
-     * @param graph Specifies which graph to update ("respeck" or "thingy").
-     * @param x Accelerometer x-axis value.
-     * @param y Accelerometer y-axis value.
-     * @param z Accelerometer z-axis value.
-     */
     fun updateGraph(graph: String, x: Float, y: Float, z: Float) {
-        // Check which graph to update based on the 'graph' parameter
         if (graph == "respeck") {
-            // Add new entries to Respeck data sets
             dataSet_res_accel_x.addEntry(Entry(time, x))
             dataSet_res_accel_y.addEntry(Entry(time, y))
             dataSet_res_accel_z.addEntry(Entry(time, z))
-
-            // Update the UI on the main thread
-            runOnUiThread {
-                allRespeckData.notifyDataChanged()
-                respeckChart.notifyDataSetChanged()
-                respeckChart.invalidate()
-                // Set the visible range of the x-axis
-                respeckChart.setVisibleXRangeMaximum(150f)
-                // Move the view to the latest data point
-                respeckChart.moveViewToX(respeckChart.lowestVisibleX + 40)
-            }
+            allRespeckData.notifyDataChanged()
+            respeckChart.notifyDataSetChanged()
+            respeckChart.invalidate()
         } else if (graph == "thingy") {
-            // Add new entries to Thingy data sets
             dataSet_thingy_accel_x.addEntry(Entry(time, x))
             dataSet_thingy_accel_y.addEntry(Entry(time, y))
             dataSet_thingy_accel_z.addEntry(Entry(time, z))
-
-            // Update the UI on the main thread
-            runOnUiThread {
-                allThingyData.notifyDataChanged()
-                thingyChart.notifyDataSetChanged()
-                thingyChart.invalidate()
-                // Set the visible range of the x-axis
-                thingyChart.setVisibleXRangeMaximum(150f)
-                // Move the view to the latest data point
-                thingyChart.moveViewToX(thingyChart.lowestVisibleX + 40)
-            }
+            allThingyData.notifyDataChanged()
+            thingyChart.notifyDataSetChanged()
+            thingyChart.invalidate()
         }
     }
 
-    /**
-     * onDestroy is called when the activity is destroyed.
-     * It unregisters the broadcast receivers and stops the background threads.
-     */
+    private fun loadModel() {
+        val modelPath = "model.tflite"  // Replace with your model's path
+        try {
+            val assetManager = assets
+            val model = FileUtil.loadMappedFile(this, modelPath)
+            tflite = Interpreter(model)
+            Log.d("LiveDataActivity", "TensorFlow Lite model loaded successfully")
+        } catch (e: Exception) {
+            Log.e("LiveDataActivity", "Error loading TensorFlow Lite model", e)
+        }
+    }
+
+    private fun classifyActivity() {
+        if (!::tflite.isInitialized) {
+            Log.e("LiveDataActivity", "Model not initialized")
+            return
+        }
+        try {
+            // Prepare the input tensor for classification
+            val inputBuffer = TensorBuffer.createFixedSize(intArrayOf(1, 600), DataType.FLOAT32)
+            inputBuffer.loadArray(combinedData)
+
+            // Run the model
+            val outputBuffer = TensorBuffer.createFixedSize(intArrayOf(1, 6), DataType.FLOAT32)
+            tflite.run(inputBuffer.buffer, outputBuffer.buffer)
+
+            // Process the result (assuming it’s a classification task)
+            val result = outputBuffer.floatArray
+            val maxIndex = result.indexOfFirst { it == result.maxOrNull() ?: -1f }
+            updateClassificationResult(maxIndex)
+        } catch (e: Exception) {
+            Log.e("LiveDataActivity", "Error during classification", e)
+        }
+    }
+
+    private fun updateClassificationResult(index: Int) {
+        // Get the activity label using the index
+        val activityLabel = getActivityFromIndex(index)
+
+        // Update the classification view with the activity result
+        val classificationView: TextView = findViewById(R.id.classification_label)
+        classificationView.text = "Activity: $activityLabel"
+    }
+
+    fun updateSlidingWindow(list: MutableList<Float>, newValue: Float, combinedData: FloatArray, dataIndex: Int) {
+        list.removeAt(0) // Remove the oldest element
+        list.add(newValue) // Append the new value
+
+        // Update the combinedData at the appropriate index
+        for (i in list.indices) {
+            combinedData[i * 6 + dataIndex] = list[i]
+        }
+    }
+
+    fun getActivityFromIndex(index: Int): String {
+        return when (index) {
+            0 -> "SittingStanding"
+            1 -> "lyingBack"
+            2 -> "lyingLeft"
+            3 -> "lyingRight"
+            4 -> "lyingStomach"
+            5 -> "miscMovement"
+            6 -> "normalWalking"
+            7 -> "running"
+            8 -> "shuffleWalking"
+            9 -> "ascending"
+            10 -> "descending"
+            else -> "miscMovement"
+
+        }
+    }
+
     override fun onDestroy() {
         super.onDestroy()
-        // Unregister the broadcast receivers
         unregisterReceiver(respeckLiveUpdateReceiver)
         unregisterReceiver(thingyLiveUpdateReceiver)
-        // Quit the loopers to stop background threads
-        looperRespeck.quit()
-        looperThingy.quit()
     }
 }
