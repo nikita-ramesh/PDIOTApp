@@ -68,14 +68,15 @@ class LiveDataActivity : AppCompatActivity() {
     private var respeckData = FloatArray(300) // 100 timesteps * 3 features (X, Y, Z)
     private var thingyData = FloatArray(300)  // 100 timesteps * 3 features (X, Y, Z)
 
+    private var respeckSampleCount = 0
+    private var thingySampleCount = 0
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_live_data)
-        val classificationView: TextView = findViewById(R.id.classification_label)
 
         // Load TensorFlow Lite model
         loadModel()
-
         setupCharts()
 
         // Respeck Receiver
@@ -91,10 +92,11 @@ class LiveDataActivity : AppCompatActivity() {
                     updateSlidingWindow(xRespeck, x, respeckData, 0)
                     updateSlidingWindow(yRespeck, y, respeckData, 1)
                     updateSlidingWindow(zRespeck, z, respeckData, 2)
+                    respeckSampleCount++
 
                     time += 1
                     updateGraph("respeck", x, y, z)
-                    classifyActivity()
+                    checkAndClassifyActivity()
                 }
             }
         }
@@ -109,7 +111,7 @@ class LiveDataActivity : AppCompatActivity() {
         thingyLiveUpdateReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
                 val action = intent.action
-                if (action == Constants.ACTION_THINGY_BROADCAST)  {
+                if (action == Constants.ACTION_THINGY_BROADCAST) {
                     val liveData = intent.getSerializableExtra(Constants.THINGY_LIVE_DATA) as ThingyLiveData
                     val x = liveData.accelX
                     val y = liveData.accelY
@@ -118,10 +120,11 @@ class LiveDataActivity : AppCompatActivity() {
                     updateSlidingWindow(xThingy, x, thingyData, 0)
                     updateSlidingWindow(yThingy, y, thingyData, 1)
                     updateSlidingWindow(zThingy, z, thingyData, 2)
+                    thingySampleCount++
 
                     time += 1
                     updateGraph("thingy", x, y, z)
-                    classifyActivity()
+                    checkAndClassifyActivity()
                 }
             }
         }
@@ -131,6 +134,27 @@ class LiveDataActivity : AppCompatActivity() {
         looperThingy = handlerThreadThingy.looper
         val handlerThingy = Handler(looperThingy)
         this.registerReceiver(thingyLiveUpdateReceiver, filterTestThingy, null, handlerThingy)
+    }
+
+    // Function to check if both sensors have collected enough data before running classification
+    private fun checkAndClassifyActivity() {
+        // Ensure both Respeck and Thingy have received 100 new steps before running classification
+        if (respeckSampleCount >= 100 && thingySampleCount >= 100) {
+            classifyActivity()
+            // Reset step counts after running classification so new windows can be collected
+            respeckSampleCount = 0
+            thingySampleCount = 0
+            // Optionally clear sliding windows if you want to start fresh each time:
+            xRespeck.clear(); yRespeck.clear(); zRespeck.clear()
+            xThingy.clear(); yThingy.clear(); zThingy.clear()
+            // Reinitialize with zeros or empty values for next collection round:
+            repeat(100) {
+                xRespeck.add(0f); yRespeck.add(0f); zRespeck.add(0f)
+                xThingy.add(0f); yThingy.add(0f); zThingy.add(0f)
+            }
+        } else {
+            Log.d("Sync", "Waiting for both sensors to provide enough samples...")
+        }
     }
 
     fun setupCharts() {
@@ -163,6 +187,7 @@ class LiveDataActivity : AppCompatActivity() {
         allRespeckData = LineData(dataSetsRes)
         respeckChart.data = allRespeckData
         respeckChart.invalidate()
+        respeckChart.legend.isEnabled = false
 
         time = 0f
         val entries_thingy_accel_x = ArrayList<Entry>()
@@ -189,6 +214,7 @@ class LiveDataActivity : AppCompatActivity() {
         allThingyData = LineData(dataSetsThingy)
         thingyChart.data = allThingyData
         thingyChart.invalidate()
+        thingyChart.legend.isEnabled = false
     }
 
     fun updateGraph(graph: String, x: Float, y: Float, z: Float) {
@@ -261,30 +287,38 @@ class LiveDataActivity : AppCompatActivity() {
     }
 
     fun updateSlidingWindow(list: MutableList<Float>, newValue: Float, buffer: FloatArray, featureIndex: Int) {
+        if (list.size < 100) {
+            Log.e("LiveDataActivity", "List size is smaller than expected!")
+            return
+        }
+
         list.removeAt(0) // Remove oldest value
         list.add(newValue) // Add new value
 
         // Update buffer at appropriate index
         for (i in list.indices) {
-            buffer[i * 3 + featureIndex] = list[i]
+            if (i * 3 + featureIndex < buffer.size) {
+                buffer[i * 3 + featureIndex] = list[i]
+            } else {
+                Log.e("LiveDataActivity", "Buffer index out of bounds!")
+            }
         }
     }
 
     fun getActivityFromIndex(index: Int): String {
         return when (index) {
-            0 -> "SittingStanding"
-            1 -> "lyingBack"
-            2 -> "lyingLeft"
-            3 -> "lyingRight"
-            4 -> "lyingStomach"
-            5 -> "miscMovement"
-            6 -> "normalWalking"
-            7 -> "running"
-            8 -> "shuffleWalking"
-            9 -> "ascending"
-            10 -> "descending"
-            else -> "miscMovement"
-
+            0 -> "Sitting / Standing"
+            1 -> "Lying on Back"
+            2 -> "Lying on Left"
+            3 -> "Lying on Right"
+            4 -> "Lying on Stomach"
+            5 -> "Miscellaneous Movement"
+            6 -> "Normal Walking"
+            7 -> "Running"
+            8 -> "Shuffle Walking"
+            9 -> "Ascending"
+            10 -> "Descending"
+            else -> "Miscellaneous Movement"
         }
     }
 

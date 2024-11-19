@@ -714,11 +714,16 @@ public class BluetoothSpeckService extends Service {
         }
 
         // Close the handlers
-        try {
-            Log.i(TAG, "stopSpeckService: closing handler");
-            respeckHandler.closeHandler();
-        } catch (Exception e) {
-            Log.e(TAG, "Error while closing handlers: " + e.getMessage());
+        if (respeckHandler != null) {
+            // Close the handlers
+            try {
+                Log.i(TAG, "stopSpeckService: closing handler");
+                respeckHandler.closeHandler();
+            } catch (Exception e) {
+                Log.e(TAG, "Error while closing handlers: " + e.getMessage());
+            }
+        } else {
+            Log.e("BLT", "RESpeckPacketHandler is null. Cannot close handler.");
         }
 
         if (respeckPausedReceiver != null ) {
