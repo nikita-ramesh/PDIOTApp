@@ -24,12 +24,15 @@ import com.specknet.pdiotapp.utils.Constants
 import com.specknet.pdiotapp.utils.Utils
 import kotlinx.android.synthetic.main.activity_main.*
 
+import com.specknet.pdiotapp.summary.ActivitySummaryActivity
+
 class MainActivity : AppCompatActivity() {
 
     // buttons and textviews
     lateinit var liveProcessingButton: Button
     lateinit var pairingButton: Button
     lateinit var recordButton: Button
+    lateinit var summaryButton: Button
 
     // permissions
     lateinit var permissionAlertDialog: AlertDialog.Builder
@@ -66,6 +69,7 @@ class MainActivity : AppCompatActivity() {
         liveProcessingButton = findViewById(R.id.live_button)
         pairingButton = findViewById(R.id.ble_button)
         recordButton = findViewById(R.id.record_button)
+        summaryButton = findViewById(R.id.summary_button)
 
         permissionAlertDialog = AlertDialog.Builder(this)
 
@@ -94,6 +98,11 @@ class MainActivity : AppCompatActivity() {
 
         recordButton.setOnClickListener {
             val intent = Intent(this, RecordingActivity::class.java)
+            startActivity(intent)
+        }
+
+        summaryButton.setOnClickListener {
+            val intent = Intent(this, ActivitySummaryActivity::class.java)
             startActivity(intent)
         }
     }
