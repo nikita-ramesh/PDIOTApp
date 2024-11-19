@@ -31,8 +31,6 @@ class ActivitySummaryActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_summary)
 
-        Toast.makeText(this, "ActivitySummaryActivity Started", Toast.LENGTH_LONG).show()
-
         // Initialize database and DAO
         db = AppDatabase.getDatabase(this)
         activityLogDao = db.activityLogDao()
