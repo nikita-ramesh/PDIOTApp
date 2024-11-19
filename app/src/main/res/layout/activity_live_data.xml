@@ -17,6 +17,17 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
 
+    <!-- Social Signal Label (added below Classification Label) -->
+    <TextView
+        android:id="@+id/social_signal_label"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Social Signal: "
+        android:textSize="18sp"
+        app:layout_constraintTop_toBottomOf="@id/classification_label"
+        app:layout_constraintStart_toStartOf="@id/classification_label"
+        app:layout_constraintEnd_toEndOf="@id/classification_label" />
+
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
