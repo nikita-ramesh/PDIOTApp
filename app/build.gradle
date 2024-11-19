@@ -1,6 +1,7 @@
 apply plugin: 'com.android.application'
 apply plugin: 'kotlin-android'
 apply plugin: 'kotlin-android-extensions'
+apply plugin: 'kotlin-kapt'
 
 android {
     compileOptions {
@@ -78,4 +79,12 @@ dependencies {
     // For TensorFlow Lite with support for models that require
     // TensorFlow Lite's extra features like quantization and optimization
     implementation 'org.tensorflow:tensorflow-lite-support:0.4.3'
+
+
+    // for the history/log feature
+    implementation 'androidx.room:room-runtime:2.4.2'
+    kapt 'androidx.room:room-compiler:2.4.2'
+    implementation 'androidx.sqlite:sqlite-framework:2.2.0' // Compatible version for sqlite
+    implementation 'androidx.sqlite:sqlite:2.2.0' // Compatible sqlite version
+
 }
