@@ -26,6 +26,12 @@ import org.tensorflow.lite.Interpreter
 import org.tensorflow.lite.support.common.FileUtil
 import org.tensorflow.lite.support.tensorbuffer.TensorBuffer
 
+// for history/log functionality:
+import com.specknet.pdiotapp.database.AppDatabase
+import com.specknet.pdiotapp.database.dao.ActivityLogDao
+import com.specknet.pdiotapp.database.entities.ActivityLogEntry
+import java.util.concurrent.Executors
+
 class LiveDataActivity : AppCompatActivity() {
 
     lateinit var dataSet_res_accel_x: LineDataSet
@@ -71,9 +77,23 @@ class LiveDataActivity : AppCompatActivity() {
     private var respeckSampleCount = 0
     private var thingySampleCount = 0
 
+    // for history/log functinality:
+    private lateinit var db: AppDatabase
+    private lateinit var activityLogDao: ActivityLogDao
+    private var currentActivity: String? = null
+    private var activityStartTime: Long = 0L
+    private val executorService = Executors.newSingleThreadExecutor()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_live_data)
+
+        // for history/log functionality: Initialize the database and DAO
+        db = AppDatabase.getDatabase(this)
+        activityLogDao = db.activityLogDao()
+        // for history/log functionality: Initialize activity start time
+        activityStartTime = System.currentTimeMillis()
+
 
         // Load TensorFlow Lite model
         loadModel()
@@ -284,6 +304,29 @@ class LiveDataActivity : AppCompatActivity() {
         // Update the classification view with the activity result
         val classificationView: TextView = findViewById(R.id.classification_label)
         classificationView.text = "Activity: $activityLabel"
+        val currentTime = System.currentTimeMillis()
+        if (currentActivity == null) {
+            // First activity detected
+            currentActivity = activityLabel
+            activityStartTime = currentTime
+        } else if (currentActivity != activityLabel) {
+            // Activity has changed
+            val activityEndTime = currentTime
+            // Log the previous activity
+            val entry = ActivityLogEntry(
+                activityName = currentActivity!!,
+                startTime = activityStartTime,
+                endTime = activityEndTime
+            )
+            // Insert into database in the background
+            executorService.execute {
+                activityLogDao.insert(entry)
+            }
+            // Update current activity and start time
+            currentActivity = activityLabel
+            activityStartTime = currentTime
+        }
+        // Else, activity is the same, do nothing
     }
 
     fun updateSlidingWindow(list: MutableList<Float>, newValue: Float, buffer: FloatArray, featureIndex: Int) {
@@ -326,5 +369,19 @@ class LiveDataActivity : AppCompatActivity() {
         super.onDestroy()
         unregisterReceiver(respeckLiveUpdateReceiver)
         unregisterReceiver(thingyLiveUpdateReceiver)
+
+        // Log the last activity if any
+        if (currentActivity != null) {
+            val activityEndTime = System.currentTimeMillis()
+            val entry = ActivityLogEntry(
+                activityName = currentActivity!!,
+                startTime = activityStartTime,
+                endTime = activityEndTime
+            )
+            executorService.execute {
+                activityLogDao.insert(entry)
+            }
+        }
+        executorService.shutdown()
     }
 }
