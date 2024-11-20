@@ -7,6 +7,7 @@ import android.widget.Button
 import android.widget.DatePicker
 import android.widget.ListView
 import android.widget.SimpleAdapter
+import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import com.specknet.pdiotapp.R
@@ -23,6 +24,7 @@ class ActivitySummaryActivity : AppCompatActivity() {
     private lateinit var activityLogDao: ActivityLogDao
     private lateinit var listView: ListView
     private lateinit var changeDateButton: Button
+    private lateinit var dateTextView: TextView
 
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
     private var selectedDate: Calendar = Calendar.getInstance()
@@ -31,12 +33,15 @@ class ActivitySummaryActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_summary)
 
-        // Initialize database and DAO
+        // Initialize views
         db = AppDatabase.getDatabase(this)
         activityLogDao = db.activityLogDao()
-
         listView = findViewById(R.id.activity_summary_list_view)
         changeDateButton = findViewById(R.id.change_date_button)
+        dateTextView = findViewById(R.id.date_text_view)
+
+        // Set the initial date to today's date
+        updateDateTextView()
 
         changeDateButton.setOnClickListener {
             showDatePicker()
@@ -64,13 +69,20 @@ class ActivitySummaryActivity : AppCompatActivity() {
             this,
             { _: DatePicker, year: Int, month: Int, day: Int ->
                 selectedDate.set(year, month, day)
-                displayActivitySummary()
+                updateDateTextView() // Update the date in the TextView
+                displayActivitySummary() // Display summary for the selected date
             },
             selectedDate.get(Calendar.YEAR),
             selectedDate.get(Calendar.MONTH),
             selectedDate.get(Calendar.DAY_OF_MONTH)
         )
         datePickerDialog.show()
+    }
+
+    private fun updateDateTextView() {
+        // Format the selected date and update the TextView
+        val formattedDate = dateFormat.format(selectedDate.time)
+        dateTextView.text = "Date: $formattedDate"
     }
 
     private fun displayActivitySummary() {
@@ -122,7 +134,9 @@ class ActivitySummaryActivity : AppCompatActivity() {
         }.start()
     }
 
-    private fun insertPlaceholderData() {
+    // ... Rest of the code remains unchanged ...
+
+private fun insertPlaceholderData() {
         Log.e("PlaceholderData", "insertPlaceholderData() called")
         val startCalendar = Calendar.getInstance()
         startCalendar.time = selectedDate.time

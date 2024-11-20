@@ -9,6 +9,7 @@ import android.os.Handler
 import android.os.HandlerThread
 import android.os.Looper
 import android.util.Log
+import android.widget.ImageView
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
@@ -345,13 +346,49 @@ class LiveDataActivity : AppCompatActivity() {
 
         // Update the classification view with the activity result
         runOnUiThread {
+            // Update classification label
             val classificationView: TextView = findViewById(R.id.classification_label)
             if (classificationView != null) {
                 classificationView.text = "Activity: $activityLabel"
             } else {
                 Log.e("LiveDataActivity", "TextView for classification not found.")
             }
+
+            // Update center image dynamically
+            val centerImageView: ImageView = findViewById(R.id.center_image)
+            if (centerImageView != null) {
+                // Choose an image resource based on the activity label
+//                0 -> "Sitting / Standing"
+//                1 -> "Lying on Back"
+//                2 -> "Lying on Left"
+//                3 -> "Lying on Right"
+//                4 -> "Lying on Stomach"
+//                5 -> "Miscellaneous Movement"
+//                6 -> "Normal Walking"
+//                7 -> "Running"
+//                8 -> "Shuffle Walking"
+//                9 -> "Ascending"
+//                10 -> "Descending"
+                val imageResource = when (activityLabel) {
+                    "Sitting / Standing" -> R.drawable.sitting_standing
+                    "Lying on Back" -> R.drawable.lying_back
+                    "Lying on Left" -> R.drawable.lying_left
+                    "Lying on Right" -> R.drawable.lying_right
+                    "Lying on Stomach" -> R.drawable.lying_stomach
+                    "Miscellaneous Movement" -> R.drawable.misc
+                    "Normal Walking" -> R.drawable.walking
+                    "Running" -> R.drawable.running
+                    "Shuffle Walking" -> R.drawable.shuffle_walking
+                    "Ascending" -> R.drawable.upstairs
+                    "Descending" -> R.drawable.downstairs
+                    else -> R.drawable.sitting_standing
+                }
+                centerImageView.setImageResource(imageResource)
+            } else {
+                Log.e("LiveDataActivity", "ImageView for center_image not found.")
+            }
         }
+
 
         val currentTime = System.currentTimeMillis()
         if (currentActivity == null) {
