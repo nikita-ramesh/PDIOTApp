@@ -43,7 +43,7 @@ This application is part of the IoT system developed for the PDIOT course. It in
      3. Hyperventilating  
      4. Other (talking, eating, singing, and laughing)  
 
-     **Daily Activities** (split into eleven classes):  
+     **Daily Activities**:
      1. Sitting and Standing  
      2. Lying on the left side  
      3. Lying on the right side  
